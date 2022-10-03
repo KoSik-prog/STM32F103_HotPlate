@@ -59,6 +59,8 @@ uint8_t ReceivedData[40];
 uint8_t ReceivedDataFlag = 0;
 
 uint8_t buf[32];
+
+uint8_t beepFlag = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -88,6 +90,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi){
 	oledRefreshAll(&hspi1);
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+	if(GPIO_Pin == BUTTON_1_Pin){
+		sprintf((char*)buf,"Dziala!");
+		oledDispTxt(0, 0, buf, Font_11x18, 1);
+		beepFlag = 1;
+	}
+
 }
 /* USER CODE END 0 */
 
@@ -128,6 +139,7 @@ int main(void)
   MX_TIM4_Init();
   MX_USB_PCD_Init();
   /* USER CODE BEGIN 2 */
+  	HAL_TIM_Base_Start_IT(&htim2);
   	oledInit(&hspi1, 1);
 
   	sprintf((char*)buf,"HOT");
@@ -139,12 +151,44 @@ int main(void)
   	oledRefreshActiveFlag = 1;
   	oledRefreshAll(&hspi1);
 
+  	TIM3->CCR1 = 9;
+  	TIM3->PSC = 1400;
+  	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  	HAL_Delay(150);
+  	HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_1);
+
+  	HAL_Delay(300);
+
+  	//update_arr(&htim3, 1200);
+  	TIM3->PSC = 1000;
+  	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+	HAL_Delay(150);
+	HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_1);
+
+	HAL_Delay(300);
+
+	//update_arr(&htim3, 1200);
+	TIM3->PSC = 600;
+	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+	HAL_Delay(150);
+	HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_1);
+
+	oledDisplayCls(0);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  oledDisplayCls(0);
+	  HAL_Delay(40);
+	  if(beepFlag == 1){
+		  beepFlag = 0;
+		  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+		  HAL_Delay(150);
+		  HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_1);
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -362,7 +406,7 @@ static void MX_TIM2_Init(void)
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim2.Init.Period = 219;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
   {
     Error_Handler();
@@ -403,9 +447,9 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 0;
+  htim3.Init.Prescaler = 700;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
+  htim3.Init.Period = 17;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
@@ -549,10 +593,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, BUTTON_1_Pin|MAX6675_2_CS_Pin|FAN1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, OLED_CS_Pin|OLED_RES_Pin|OLED_DC_Pin|MAX6675_1_CS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, OLED_CS_Pin|OLED_RES_Pin|OLED_DC_Pin|MAX6675_1_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, MAX6675_2_CS_Pin|FAN1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : AC_ZERO_Pin */
   GPIO_InitStruct.Pin = AC_ZERO_Pin;
@@ -560,17 +604,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(AC_ZERO_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : ENC_1_Pin ENC_2_Pin */
-  GPIO_InitStruct.Pin = ENC_1_Pin|ENC_2_Pin;
+  /*Configure GPIO pins : ENC_1_Pin ENC_2_Pin BUTTON_1_Pin */
+  GPIO_InitStruct.Pin = ENC_1_Pin|ENC_2_Pin|BUTTON_1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : BUTTON_1_Pin MAX6675_2_CS_Pin FAN1_Pin */
-  GPIO_InitStruct.Pin = BUTTON_1_Pin|MAX6675_2_CS_Pin|FAN1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : OLED_CS_Pin OLED_RES_Pin OLED_DC_Pin MAX6675_1_CS_Pin */
@@ -579,6 +616,26 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : MAX6675_2_CS_Pin FAN1_Pin */
+  GPIO_InitStruct.Pin = MAX6675_2_CS_Pin|FAN1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI2_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 }
 

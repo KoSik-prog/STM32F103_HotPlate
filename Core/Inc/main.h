@@ -61,12 +61,16 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define AC_ZERO_Pin GPIO_PIN_13
 #define AC_ZERO_GPIO_Port GPIOC
+#define AC_ZERO_EXTI_IRQn EXTI15_10_IRQn
 #define ENC_1_Pin GPIO_PIN_0
 #define ENC_1_GPIO_Port GPIOA
+#define ENC_1_EXTI_IRQn EXTI0_IRQn
 #define ENC_2_Pin GPIO_PIN_1
 #define ENC_2_GPIO_Port GPIOA
+#define ENC_2_EXTI_IRQn EXTI1_IRQn
 #define BUTTON_1_Pin GPIO_PIN_2
 #define BUTTON_1_GPIO_Port GPIOA
+#define BUTTON_1_EXTI_IRQn EXTI2_IRQn
 #define OLED_CS_Pin GPIO_PIN_0
 #define OLED_CS_GPIO_Port GPIOB
 #define OLED_RES_Pin GPIO_PIN_1
