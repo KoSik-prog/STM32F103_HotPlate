@@ -67,7 +67,6 @@ void Error_Handler(void);
 #define ENC_1_EXTI_IRQn EXTI0_IRQn
 #define ENC_2_Pin GPIO_PIN_1
 #define ENC_2_GPIO_Port GPIOA
-#define ENC_2_EXTI_IRQn EXTI1_IRQn
 #define BUTTON_1_Pin GPIO_PIN_2
 #define BUTTON_1_GPIO_Port GPIOA
 #define BUTTON_1_EXTI_IRQn EXTI2_IRQn
