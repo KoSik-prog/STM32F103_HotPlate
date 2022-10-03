@@ -69,6 +69,10 @@ void Error_Handler(void);
 #define BUTTON_1_GPIO_Port GPIOA
 #define OLED_CS_Pin GPIO_PIN_0
 #define OLED_CS_GPIO_Port GPIOB
+#define OLED_RES_Pin GPIO_PIN_1
+#define OLED_RES_GPIO_Port GPIOB
+#define OLED_DC_Pin GPIO_PIN_2
+#define OLED_DC_GPIO_Port GPIOB
 #define MAX6675_1_CS_Pin GPIO_PIN_12
 #define MAX6675_1_CS_GPIO_Port GPIOB
 #define MAX6675_2_CS_Pin GPIO_PIN_8

@@ -61,7 +61,7 @@ main-build: STM32F103_HotPlate.elf secondary-outputs
 
 # Tool invocations
 STM32F103_HotPlate.elf STM32F103_HotPlate.map: $(OBJS) $(USER_OBJS) C:\STM32\workspace\STM32F103_HotPlate\STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "STM32F103_HotPlate.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\STM32\workspace\STM32F103_HotPlate\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="STM32F103_HotPlate.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+	arm-none-eabi-gcc -o "STM32F103_HotPlate.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\STM32\workspace\STM32F103_HotPlate\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="STM32F103_HotPlate.map" -Wl,--gc-sections -static -u _printf_float --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
