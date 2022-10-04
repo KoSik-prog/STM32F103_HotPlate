@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include "oled_ssd1306.h"
 #include "buzzer.h"
+#include "max6675.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,6 +45,7 @@
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 DMA_HandleTypeDef hdma_spi1_tx;
+DMA_HandleTypeDef hdma_spi2_rx;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
@@ -60,7 +62,12 @@ uint8_t ReceivedData[40];
 uint8_t ReceivedDataFlag = 0;
 
 uint8_t buf[32];
-int16_t testEncoder = 0;
+
+int16_t plateTemperature = 0;
+int16_t topTemperature = 0;
+
+uint8_t menuPos = 0;
+uint8_t menuPosOld = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -94,18 +101,49 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi){
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin == BUTTON_1_Pin){
-		sprintf((char*)buf,"Dziala!");
-		oledDispTxt(0, 0, buf, Font_11x18, 1);
 		beep(500, 30);
 	}
 	if(GPIO_Pin == ENC_1_Pin){
 		if(HAL_GPIO_ReadPin(ENC_2_GPIO_Port, ENC_2_Pin) == GPIO_PIN_SET){
-			testEncoder--;
+			menuPos--;
 		} else {
-			testEncoder++;
+			menuPos++;
 		}
 	}
 
+}
+
+uint8_t station_init(void){
+	uint8_t errorFlag = 0;
+	char errorDescription[20];
+	uint16_t bufTemp;
+
+	uint8_t status = max6675_read_temperature(&hspi2, MAX6675_1_CS_GPIO_Port, MAX6675_1_CS_Pin, &bufTemp);
+	if(status != 0){
+		errorFlag = 1;
+		sprintf(errorDescription, "temp sensor 1");
+	}
+    status = max6675_read_temperature(&hspi2, MAX6675_2_CS_GPIO_Port, MAX6675_2_CS_Pin, &bufTemp);
+    if(status != 0){
+		errorFlag = 1;
+		sprintf(errorDescription, "temp sensor 2");
+	}
+    return errorFlag;
+}
+
+
+void gui_menu(void){
+	sprintf((char*)buf,"%i", menuPos);
+	oledDispTxt(90, 54, buf, Font_7x10, 1);
+
+
+	if (menuPos == 0){
+		sprintf((char*)buf,"menu 0");
+		oledDispTxt(0, 20, buf, Font_16x26, 1);
+	} else if (menuPos == 1){
+		sprintf((char*)buf,"menu 1");
+		oledDispTxt(0, 20, buf, Font_16x26, 1);
+	}
 }
 /* USER CODE END 0 */
 
@@ -146,34 +184,35 @@ int main(void)
   MX_TIM4_Init();
   MX_USB_PCD_Init();
   /* USER CODE BEGIN 2 */
-  	HAL_TIM_Base_Start_IT(&htim2);
-  	oledInit(&hspi1, 1);
+  	HAL_GPIO_WritePin(MAX6675_1_CS_GPIO_Port, MAX6675_1_CS_Pin, 1);
+  	HAL_GPIO_WritePin(MAX6675_2_CS_GPIO_Port, MAX6675_2_CS_Pin, 1);
 
+  	HAL_TIM_Base_Start_IT(&htim2);
+
+  	oledInit(&hspi1, 1);
   	sprintf((char*)buf,"HOT");
   	oledDispTxt(40, 0, buf, Font_16x26, 1);
-
   	sprintf((char*)buf,"PLATE");
-  	oledDispTxt(20, 35, buf, Font_16x26, 1);
-
+  	oledDispTxt(20, 25, buf, Font_16x26, 1);
+  	sprintf((char*)buf,"ver.1.0");
+  	oledDispTxt(74, 54, buf, Font_7x10, 1);
   	oledRefreshActiveFlag = 1;
   	oledRefreshAll(&hspi1);
 
-  	beep(1400, 40);
+  	beep(1400, 20);
   	beep_callback(&htim3, TIM_CHANNEL_1);
 
-	HAL_Delay(1000);
+  	station_init();
+	HAL_Delay(2000);
 	oledDisplayCls(0);
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  oledDisplayCls(0);
-	  sprintf((char*)buf,"enc: %i", testEncoder);
-	  oledDispTxt(0, 35, buf, Font_11x18, 1);
-	  HAL_Delay(100);
+	  gui_menu();
+	  HAL_Delay(200);
 	  beep_callback(&htim3, TIM_CHANNEL_1);
     /* USER CODE END WHILE */
 
@@ -289,7 +328,7 @@ static void MX_SPI2_Init(void)
   hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
   hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -560,6 +599,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Channel3_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+  /* DMA1_Channel4_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
 
 }
 

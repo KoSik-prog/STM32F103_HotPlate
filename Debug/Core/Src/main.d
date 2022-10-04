@@ -27,7 +27,8 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pcd.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_ll_usb.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pcd_ex.h \
- ../Core/Inc/oled_ssd1306.h ../Core/Inc/fonts.h ../Core/Inc/buzzer.h
+ ../Core/Inc/oled_ssd1306.h ../Core/Inc/fonts.h ../Core/Inc/buzzer.h \
+ ../Core/Inc/max6675.h
 ../Core/Inc/main.h:
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h:
 ../Core/Inc/stm32f1xx_hal_conf.h:
@@ -60,3 +61,4 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/oled_ssd1306.h:
 ../Core/Inc/fonts.h:
 ../Core/Inc/buzzer.h:
+../Core/Inc/max6675.h:
