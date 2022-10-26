@@ -136,6 +136,18 @@ void oledDrawPoint(uint16_t x, uint16_t y, unsigned char p){
 	 }
 }
 
+void oledDrawHorizontalLine(int8_t y, uint8_t colour){
+	for(int8_t i=0; i<125; i++){
+		oledDrawPoint(i, y, colour);
+	}
+}
+
+void oledDrawHorizontalBox(int8_t y, uint8_t height, uint8_t colour){
+	for(int8_t i=0; i<height; i++){
+		oledDrawHorizontalLine(y + i, colour);
+	}
+}
+
 void drawCircleSub(int xc, int yc, int x, int y, uint8_t colour){
 	oledDrawPoint(xc+x, yc+y, colour);
 	oledDrawPoint(xc-x, yc+y, colour);

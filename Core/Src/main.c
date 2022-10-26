@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -25,6 +26,8 @@
 #include "oled_ssd1306.h"
 #include "buzzer.h"
 #include "max6675.h"
+#include "usbd_cdc_if.h"
+#include "pid.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -52,22 +55,34 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 
-PCD_HandleTypeDef hpcd_USB_FS;
-
 /* USER CODE BEGIN PV */
+#define MENU_POS_COUNT 3 //number of menu items
+
 extern uint8_t oledRefreshActiveFlag;
 
-uint8_t DataToSend[40];
-uint8_t ReceivedData[40];
-uint8_t ReceivedDataFlag = 0;
+uint16_t MessageLength = 0;
+uint8_t TxBuffer[40];
+uint8_t RxBuffer[40];
 
 uint8_t buf[32];
 
-int16_t plateTemperature = 0;
-int16_t topTemperature = 0;
+double bedTemperature = 0;
+double expectedBedTemperature = 0;
+double pcbTemperature = 0;
 
-uint8_t menuPos = 0;
-uint8_t menuPosOld = 0;
+int16_t menuPos = 1;
+int16_t menuYPos = 0;
+uint8_t menuActiveFlag = 1;
+uint8_t buttonFlag = 0;
+
+//
+double bedPower = 0;
+
+// PID
+PID_TypeDef bedTempPID;
+double bedTempPIDSetpoint = 0.0;
+
+uint8_t readTemperatureFlag = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -80,9 +95,8 @@ static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
-static void MX_USB_PCD_Init(void);
 /* USER CODE BEGIN PFP */
-
+void click_callback(uint8_t direction);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -101,13 +115,20 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi){
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if(GPIO_Pin == BUTTON_1_Pin){
-		beep(500, 30);
+		if(buttonFlag == 0){ //debouncing
+			buttonFlag = 1;
+			if(menuActiveFlag == 1){
+					click_callback(2);
+				}
+			beep(500, 30);
+		}
 	}
 	if(GPIO_Pin == ENC_1_Pin){
+		beep(1500, 10);
 		if(HAL_GPIO_ReadPin(ENC_2_GPIO_Port, ENC_2_Pin) == GPIO_PIN_SET){
-			menuPos--;
+			click_callback(0);
 		} else {
-			menuPos++;
+			click_callback(1);
 		}
 	}
 
@@ -131,18 +152,171 @@ uint8_t station_init(void){
     return errorFlag;
 }
 
+void read_bed_temperature(double *temperature){
+	uint16_t bufTemp;
 
-void gui_menu(void){
-	sprintf((char*)buf,"%i", menuPos);
-	oledDispTxt(90, 54, buf, Font_7x10, 1);
+	max6675_read_temperature(&hspi2, MAX6675_2_CS_GPIO_Port, MAX6675_2_CS_Pin, &bufTemp);
+	*temperature = (double)bufTemp;
+}
+
+void read_pcb_temperature(double *temperature){
+	uint16_t bufTemp;
+
+	max6675_read_temperature(&hspi2, MAX6675_1_CS_GPIO_Port, MAX6675_1_CS_Pin, &bufTemp);
+	*temperature = (double)bufTemp;
+}
+
+void display_menu_line(int8_t x, int8_t y, const uint8_t *text){
+	#define FONT_HEIGHT 18
+
+	oledDispTxt(x, y, text, Font_11x18, 1);
+	oledDrawHorizontalLine(y -1, 0);
+	oledDrawHorizontalLine(y + FONT_HEIGHT + 1, 0);
+}
+
+void display_main_menu(uint8_t position){
+	#define CENTER_POS (64/2) - (18/2) //displayHeight/2 - fontSize/2
+	#define SPACING 27
+	uint8_t xPos = 25;
+
+	position--;
+
+	oledDrawHorizontalBox((-position * SPACING) + CENTER_POS - SPACING, 18, 0); //clear box
+	for(uint8_t i=28; i<33; i++){ //selected point
+		for(uint8_t q=0; q<3; q++){
+			oledDrawPoint(q, i, 1);
+		}
+	}
+	sprintf((char*)buf,"Solder  ");
+	if(position == 0){xPos = 7;} else {xPos = 25;}
+	display_menu_line(xPos, (-position * SPACING) + CENTER_POS, buf);
+	sprintf((char*)buf,"Preheat ");
+	if(position == 1){xPos = 7;} else {xPos = 25;}
+	display_menu_line(xPos, (-position * SPACING) + SPACING + CENTER_POS, buf);
+	sprintf((char*)buf,"Reflow  ");
+	if(position == 2){xPos = 7;} else {xPos = 25;}
+	display_menu_line(xPos, (-position * SPACING) + SPACING*2 + CENTER_POS, buf);
+	sprintf((char*)buf,"Settings");
+	if(position == 3){xPos = 7;} else {xPos = 25;}
+	display_menu_line(xPos, (-position * SPACING) + SPACING*3 + CENTER_POS, buf);
+	oledDrawHorizontalBox((-position * SPACING) + SPACING*4 + CENTER_POS, 18, 0); //clear box
+}
+
+void display_submenu_1(uint16_t mainPos, uint16_t position){
+	#define CENTER_POS (64/2) - (18/2) //displayHeight/2 - fontSize/2
+	#define SPACING 27
+	uint8_t xPos = 25;
+
+	position--;
+
+	oledDrawHorizontalBox((-position * SPACING) + CENTER_POS - SPACING, 18, 0); //clear box
+		for(uint8_t i=28; i<33; i++){ //selected point
+			for(uint8_t q=0; q<3; q++){
+				oledDrawPoint(q, i, 1);
+			}
+		}
+	sprintf((char*)buf,"Set temp  ");
+	if(position == 0){xPos = 7;} else {xPos = 25;}
+	display_menu_line(xPos, (-position * SPACING) + CENTER_POS, buf);
+	sprintf((char*)buf,"Start     ");
+	if(position == 1){xPos = 7;} else {xPos = 25;}
+	display_menu_line(xPos, (-position * SPACING) + SPACING + CENTER_POS, buf);
+	sprintf((char*)buf,"Back      ");
+	if(position == 2){xPos = 7;} else {xPos = 25;}
+	display_menu_line(xPos, (-position * SPACING) + SPACING*2 + CENTER_POS, buf);
+	oledDrawHorizontalBox((-position * SPACING) + SPACING*3 + CENTER_POS, 18, 0); //clear box
+}
+
+void display_preheat_set(void){
+	if(readTemperatureFlag == 0){
+		readTemperatureFlag = 1;
+	}
+	sprintf((char*)buf, "Set temp: ");
+	oledDispTxt(0, 2, buf, Font_11x18, 1);
+	if(bedTemperature < 100){
+		sprintf((char*)buf," %.0f*C  ", expectedBedTemperature);
+	} else {
+		sprintf((char*)buf,"%.0f*C  ", expectedBedTemperature);
+	}
+	oledDispTxt(33, 35, buf, Font_11x18, 1);
+}
+
+void display_preheat_start(void){
+	if(readTemperatureFlag == 0){
+		readTemperatureFlag = 1;
+	}
+	sprintf((char*)buf, "Bed temp: ");
+	oledDispTxt(0, 2, buf, Font_11x18, 1);
+	if(bedTemperature < 100){
+		sprintf((char*)buf," %.0f*C  ", bedTemperature);
+	} else {
+		sprintf((char*)buf,"%.0f*C  ", bedTemperature);
+	}
+	oledDispTxt(33, 35, buf, Font_11x18, 1);
+}
+
+void display_menu(void){
+	if(menuPos >=100 && menuPos < 1000){
+		if(menuPos == 122){
+			display_preheat_start();
+		}else if(menuPos == 112){
+			display_preheat_set();
+		}
+	}else if(menuPos >=10 && menuPos < 100){
+		uint16_t subMenuPos = menuPos / 10;
+		uint16_t mainMenuPos = menuPos % 10;
+		if(mainMenuPos == 2){
+			display_submenu_1(mainMenuPos, subMenuPos);
+		}
+	} else if(menuPos < 10){
+		display_main_menu(menuPos);
+	}
+}
 
 
-	if (menuPos == 0){
-		sprintf((char*)buf,"menu 0");
-		oledDispTxt(0, 20, buf, Font_16x26, 1);
-	} else if (menuPos == 1){
-		sprintf((char*)buf,"menu 1");
-		oledDispTxt(0, 20, buf, Font_16x26, 1);
+// direction 0-left(-)  1-right(+)  2-OK
+void click_callback(uint8_t direction){
+	if(menuPos >=100 && menuPos < 1000){
+		if(direction == 0){
+			if(menuPos > 200){
+				menuPos -= 100;
+			}
+		} else if(direction == 1){
+				menuPos += 100;
+		} else { //OK
+			if(menuPos == 122){ //if back
+				menuPos = 12;
+				oledDisplayCls(0);
+				readTemperatureFlag = 0;
+
+			}
+		}
+	}else if(menuPos >=10 && menuPos < 100){
+		if(direction == 0){
+			if(menuPos > 20){
+				menuPos -= 10;
+			}
+		} else if(direction == 1){
+				menuPos += 10;
+		} else { //OK
+			if(menuPos == 32){ //if back
+				menuPos = menuPos - ((menuPos / 10)*10);
+			} else {
+				menuPos += 100;
+				oledDisplayCls(0);
+			}
+		}
+	} else if(menuPos < 10){
+		if(direction == 0){
+			if(menuPos > 1){
+				menuPos--;
+			}
+		} else if(direction == 1){
+				menuPos++;
+		} else { //OK
+			menuPos += 10;
+			oledDisplayCls(0);
+		}
 	}
 }
 /* USER CODE END 0 */
@@ -182,7 +356,7 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_TIM4_Init();
-  MX_USB_PCD_Init();
+  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
   	HAL_GPIO_WritePin(MAX6675_1_CS_GPIO_Port, MAX6675_1_CS_Pin, 1);
   	HAL_GPIO_WritePin(MAX6675_2_CS_GPIO_Port, MAX6675_2_CS_Pin, 1);
@@ -203,17 +377,37 @@ int main(void)
   	beep_callback(&htim3, TIM_CHANNEL_1);
 
   	station_init();
-	HAL_Delay(2000);
+	HAL_Delay(200);
 	oledDisplayCls(0);
+
+	//PID
+	bedTempPIDSetpoint = 0.0;
+	//PID(&bedTempPID, &bedTemperature, &bedPower, &bedTempPIDSetpoint, 0.8, 0.7, 0.8, _PID_P_ON_E, _PID_CD_REVERSE);
+	//PID_SetMode(&bedTempPID, _PID_MODE_AUTOMATIC);
+	//PID_SetSampleTime(&bedTempPID, 1); //1ms refresh time
+	//PID_SetOutputLimits(&bedTempPID, 11, 300);
+	//---
+	//PID_Compute(&PowerPID); //calculate PID - in timer
+	//---
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  gui_menu();
+	  display_menu();
+
 	  HAL_Delay(200);
 	  beep_callback(&htim3, TIM_CHANNEL_1);
+	  buttonFlag = 0; //debouncing
+
+
+	  if(readTemperatureFlag == 1){
+		  read_bed_temperature(&bedTemperature);
+		  read_pcb_temperature(&pcbTemperature);
+	  }
+	  MessageLength = sprintf((char*) TxBuffer, "%i -> bed:%.0f / pcb:%.0f\n\r", menuPos, bedTemperature, pcbTemperature);
+	  CDC_Transmit_FS(TxBuffer, MessageLength);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -552,37 +746,6 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 2 */
   HAL_TIM_MspPostInit(&htim4);
-
-}
-
-/**
-  * @brief USB Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USB_PCD_Init(void)
-{
-
-  /* USER CODE BEGIN USB_Init 0 */
-
-  /* USER CODE END USB_Init 0 */
-
-  /* USER CODE BEGIN USB_Init 1 */
-
-  /* USER CODE END USB_Init 1 */
-  hpcd_USB_FS.Instance = USB;
-  hpcd_USB_FS.Init.dev_endpoints = 8;
-  hpcd_USB_FS.Init.speed = PCD_SPEED_FULL;
-  hpcd_USB_FS.Init.low_power_enable = DISABLE;
-  hpcd_USB_FS.Init.lpm_enable = DISABLE;
-  hpcd_USB_FS.Init.battery_charging_enable = DISABLE;
-  if (HAL_PCD_Init(&hpcd_USB_FS) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USB_Init 2 */
-
-  /* USER CODE END USB_Init 2 */
 
 }
 

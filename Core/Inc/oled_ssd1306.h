@@ -32,6 +32,8 @@ void oledRefresh(SPI_HandleTypeDef *hspi, uint8_t lcd_nr, uint16_t line);
 void oledRefreshAll(SPI_HandleTypeDef *hspi);
 void oledSetColStart(SPI_HandleTypeDef *hspi, uint8_t lcd_nr);
 void oledDrawPoint(uint16_t x, uint16_t y, unsigned char p);
+void oledDrawHorizontalBox(int8_t y, uint8_t height, uint8_t colour);
+void oledDrawHorizontalLine(int8_t y, uint8_t colour);
 char oledWriteChar(uint16_t x, uint16_t y, uint8_t ch, FontDef Font, uint8_t mode);
 char oledWriteChar2(uint16_t x, uint16_t y, uint8_t ch, FontDef Font, uint8_t mode);
 void oledDispTxt(uint16_t x, uint16_t y, const uint8_t *txt, FontDef Font, uint8_t mode);
